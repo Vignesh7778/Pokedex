@@ -27,6 +27,7 @@ app.add_middleware(
 )
 
 POKEAPI_BASE_URL = "https://pokeapi.co/api/v2/pokemon"
+POKEAPI_SPECIES_URL = "https://pokeapi.co/api/v2/pokemon-species"
 
 
 class FavoriteCreate(BaseModel):
@@ -55,20 +56,47 @@ def read_root():
 
 @app.get("/pokemon/{name}")
 def get_pokemon(name: str):
-    response = requests.get(f"{POKEAPI_BASE_URL}/{name.lower()}")
+    try:
+        response = requests.get(
+            f"{POKEAPI_BASE_URL}/{name.lower().strip()}", timeout=10
+        )
+    except requests.RequestException:
+        raise HTTPException(503, "Pokémon service is unavailable")
 
     if response.status_code != 200:
         raise HTTPException(status_code=404, detail="Pokemon not found")
 
     data = response.json()
 
+    try:
+        species_response = requests.get(
+            f"{POKEAPI_SPECIES_URL}/{data['id']}", timeout=10
+        )
+        species_response.raise_for_status()
+        generation = species_response.json().get("generation", {}).get("name")
+    except requests.RequestException:
+        generation = None
+
+    stats = {
+        stat["stat"]["name"].replace("-", "_"): stat["base_stat"]
+        for stat in data["stats"]
+    }
+
     return {
         "id": data["id"],
         "name": data["name"],
         "image": data["sprites"]["front_default"],
-        "type": data["types"][0]["type"]["name"],
+        "types": [item["type"]["name"] for item in data["types"]],
+        "abilities": [
+            item["ability"]["name"].replace("-", " ")
+            for item in data["abilities"]
+        ],
+        "stats": stats,
+        "total_stats": sum(stats.values()),
         "height": data["height"] / 10,  # decimeters -> meters
         "weight": data["weight"] / 10,  # hectograms -> kilograms
+        "base_experience": data["base_experience"],
+        "generation": generation,
     }
 
 
