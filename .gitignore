@@ -1,3 +1,7 @@
+# Dependencies and build output
+node_modules/
+dist/
+
 # Frontend
 frontend/node_modules
 frontend/dist
